@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Brick Breaker FX 🧱💥</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; touch-action:none; user-select:none; }
+    body { background:#070712; color:#fff; font-family:'Segoe UI',sans-serif; overflow:hidden; display:flex; justify-content:center; align-items:center; height:100vh; }
+    #canvas-container { position:relative; width:100vw; height:100vh; max-width:800px; max-height:600px; aspect-ratio:4/3; }
+    canvas { width:100%; height:100%; display:block; background:#070712; }
+    .arcade-nav { position:absolute; top:16px; right:16px; z-index:100; background:rgba(0,0,0,0.7); border:2px solid #ff007f; color:#ff007f; padding:8px 16px; border-radius:8px; font-weight:bold; text-decoration:none; font-size:13px; box-shadow:0 0 15px rgba(255,0,127,0.4); }
+    .hud { position:absolute; top:16px; left:16px; font-family:monospace; font-size:20px; font-weight:bold; color:#00f5ff; text-shadow:0 0 10px #00f5ff; pointer-events:none; }
+    #modal { position:absolute; inset:0; background:rgba(0,0,0,0.85); display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px; z-index:200; }
+    #modal h1 { color:#ff007f; font-size:42px; text-shadow:0 0 20px #ff007f; }
+    .btn { background:linear-gradient(135deg,#00f5ff,#ff007f); border:none; color:#fff; padding:12px 32px; font-size:18px; font-weight:bold; border-radius:8px; cursor:pointer; text-decoration:none; box-shadow:0 0 20px rgba(0,245,255,0.5); }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <a href="https://marcuscaiado.github.io/marcus-arcade/" class="arcade-nav">🕹️ Arcade Hub</a>
+    <div class="hud">SCORE: <span id="score-val">0</span> | LIVES: <span id="lives-val">3</span></div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="modal">
+      <h1 id="modal-title">GAME OVER! 💥</h1>
+      <p style="font-size:20px;">SCORE: <span id="final-score">0</span></p>
+      <button class="btn" onclick="restartGame()">PLAY AGAIN 🔄</button>
+      <a href="https://marcuscaiado.github.io/marcus-arcade/" class="btn" style="background:#222; border:1px solid #ff007f;">ARCADE HUB 🕹️</a>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Audio
+    let audioCtx = null;
+    function getAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
+    function playTone(freq, dur) {
+      try {
+        const c = getAudio(); const osc = c.createOscillator(); const g = c.createGain();
+        osc.frequency.value = freq; g.gain.setValueAtTime(0.1, c.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + dur);
+        osc.connect(g); g.connect(c.destination); osc.start(); osc.stop(c.currentTime + dur);
+      } catch(e){}
+    }
+
+    let score = 0, lives = 3, isGameOver = false;
+    let paddle = { x: 400, y: 550, w: 120, h: 16 };
+    let balls = [{ x: 400, y: 530, vx: 5, vy: -6, r: 8, fire: false }];
+    let bricks = [], powerups = [], particles = [];
+
+    function initBricks() {
+      bricks = [];
+      const colors = ['#ff007f', '#ff9f43', '#ffff00', '#00f5ff', '#b967ff'];
+      for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 10; c++) {
+          bricks.push({
+            x: 60 + c * 68,
+            y: 70 + r * 28,
+            w: 60,
+            h: 20,
+            hp: r === 0 ? 2 : 1,
+            color: colors[r]
+          });
+        }
+      }
+    }
+    initBricks();
+
+    const setPaddleX = (cx) => {
+      const rect = canvas.getBoundingClientRect();
+      paddle.x = Math.max(paddle.w/2, Math.min(800 - paddle.w/2, ((cx - rect.left) / rect.width) * 800));
+    };
+
+    window.addEventListener('mousemove', e => setPaddleX(e.clientX));
+    window.addEventListener('touchmove', e => { e.preventDefault(); setPaddleX(e.touches[0].clientX); }, { passive:false });
+    window.addEventListener('touchstart', e => { e.preventDefault(); setPaddleX(e.touches[0].clientX); }, { passive:false });
+
+    function restartGame() {
+      score = 0; lives = 3; isGameOver = false;
+      balls = [{ x: 400, y: 530, vx: 5, vy: -6, r: 8, fire: false }];
+      powerups = []; particles = [];
+      initBricks();
+      document.getElementById('score-val').textContent = '0';
+      document.getElementById('lives-val').textContent = '3';
+      document.getElementById('modal').style.display = 'none';
+      requestAnimationFrame(loop);
+    }
+
+    function loop() {
+      if (isGameOver) return;
+
+      // Update Balls
+      for (let bIdx = balls.length - 1; bIdx >= 0; bIdx--) {
+        const b = balls[bIdx];
+        b.x += b.vx;
+        b.y += b.vy;
+
+        // Walls
+        if (b.x < b.r || b.x > 800 - b.r) { b.vx *= -1; playTone(300, 0.05); }
+        if (b.y < b.r) { b.vy *= -1; playTone(300, 0.05); }
+
+        // Paddle Collision
+        if (b.y + b.r >= paddle.y && b.y - b.r <= paddle.y + paddle.h &&
+            b.x >= paddle.x - paddle.w/2 && b.x <= paddle.x + paddle.w/2 && b.vy > 0) {
+          b.vy *= -1;
+          const hitOffset = (b.x - paddle.x) / (paddle.w / 2);
+          b.vx = hitOffset * 7;
+          playTone(550, 0.08);
+        }
+
+        // Brick Collisions
+        for (let i = bricks.length - 1; i >= 0; i--) {
+          const br = bricks[i];
+          if (b.x + b.r > br.x && b.x - b.r < br.x + br.w &&
+              b.y + b.r > br.y && b.y - b.r < br.y + br.h) {
+            br.hp--;
+            if (!b.fire) b.vy *= -1;
+            playTone(700 + Math.random()*300, 0.06);
+            score += 20;
+
+            // Particles
+            for (let p=0; p<6; p++) {
+              particles.push({ x: br.x + br.w/2, y: br.y + br.h/2, vx:(Math.random()-0.5)*8, vy:(Math.random()-0.5)*8, color: br.color, life:1 });
+            }
+
+            // Power-up Drop
+            if (Math.random() < 0.2) {
+              powerups.push({ x: br.x + br.w/2, y: br.y + br.h/2, type: Math.random() > 0.5 ? 'multi' : 'wide' });
+            }
+
+            if (br.hp <= 0) bricks.splice(i, 1);
+            break;
+          }
+        }
+
+        // Ball Lost
+        if (b.y > 620) {
+          balls.splice(bIdx, 1);
+        }
+      }
+
+      // Check Lives
+      if (balls.length === 0) {
+        lives--;
+        document.getElementById('lives-val').textContent = lives;
+        playTone(180, 0.3);
+        if (lives <= 0) {
+          isGameOver = true;
+          document.getElementById('modal-title').textContent = 'GAME OVER! 💥';
+          document.getElementById('final-score').textContent = score;
+          document.getElementById('modal').style.display = 'flex';
+          return;
+        } else {
+          balls.push({ x: paddle.x, y: 530, vx: 5, vy: -6, r: 8, fire: false });
+        }
+      }
+
+      // Check Win
+      if (bricks.length === 0) {
+        isGameOver = true;
+        document.getElementById('modal-title').textContent = 'STAGE CLEARED! 🏆';
+        document.getElementById('final-score').textContent = score;
+        document.getElementById('modal').style.display = 'flex';
+        return;
+      }
+
+      // Update Powerups
+      for (let i = powerups.length - 1; i >= 0; i--) {
+        const p = powerups[i];
+        p.y += 3;
+        if (p.y > 540 && p.y < 570 && Math.abs(p.x - paddle.x) < paddle.w/2) {
+          if (p.type === 'multi') {
+            balls.push({ x: paddle.x, y: 530, vx: -5, vy: -6, r: 8, fire: false });
+            balls.push({ x: paddle.x, y: 530, vx: 3, vy: -7, r: 8, fire: false });
+          } else if (p.type === 'wide') {
+            paddle.w = Math.min(220, paddle.w + 40);
+          }
+          playTone(900, 0.15);
+          powerups.splice(i, 1);
+        } else if (p.y > 610) {
+          powerups.splice(i, 1);
+        }
+      }
+
+      // Render
+      ctx.fillStyle = '#070712'; ctx.fillRect(0, 0, 800, 600);
+
+      // Draw Bricks
+      for (const br of bricks) {
+        ctx.fillStyle = br.color;
+        ctx.shadowColor = br.color; ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.roundRect(br.x, br.y, br.w, br.h, 4); ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Draw Paddle
+      ctx.fillStyle = '#00f5ff';
+      ctx.shadowColor = '#00f5ff'; ctx.shadowBlur = 20;
+      ctx.beginPath(); ctx.roundRect(paddle.x - paddle.w/2, paddle.y, paddle.w, paddle.h, 8); ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Draw Balls
+      for (const b of balls) {
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#ff007f'; ctx.shadowBlur = 18;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Draw Powerups
+      for (const p of powerups) {
+        ctx.fillStyle = p.type === 'multi' ? '#ffff00' : '#05ffa1';
+        ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Draw Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.life -= 0.04;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
+        ctx.fillRect(p.x, p.y, 5, 5);
+        ctx.globalAlpha = 1;
+      }
+
+      document.getElementById('score-val').textContent = score;
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
