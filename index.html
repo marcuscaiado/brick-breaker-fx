@@ -80,6 +80,19 @@
     window.addEventListener('touchmove', e => { e.preventDefault(); setPaddleX(e.touches[0].clientX); }, { passive:false });
     window.addEventListener('touchstart', e => { e.preventDefault(); setPaddleX(e.touches[0].clientX); }, { passive:false });
 
+    function triggerGameOver() {
+      if (isGameOver) return;
+      isGameOver = true;
+      document.getElementById('modal-title').textContent = 'GAME OVER! 💥';
+      document.getElementById('final-score').textContent = score;
+      document.getElementById('modal').style.display = 'flex';
+      try {
+        if (window.ArcadeLeaderboard) {
+          window.ArcadeLeaderboard.submitScore('brick-breaker-fx', score);
+        }
+      } catch(e){}
+    }
+
     function restartGame() {
       score = 0; lives = 3; isGameOver = false;
       balls = [{ x: 400, y: 530, vx: 5, vy: -6, r: 8, fire: false }];
@@ -150,20 +163,7 @@
         document.getElementById('lives-val').textContent = lives;
         playTone(180, 0.3);
         if (lives <= 0) {
-          isGameOver = true;
-          document.getElementById('modal-title').textContent = 'GAME OVER! 💥';
-          document.getElementById('final-score').textContent = score;
-
-          if (window.ArcadeLeaderboard) {
-            window.ArcadeLeaderboard.show({
-              gameId: 'brick-breaker-fx',
-              score: score,
-              scoreUnit: 'PTS',
-              onRestart: restartGame
-            });
-          } else {
-            document.getElementById('modal').style.display = 'flex';
-          }
+          triggerGameOver();
           return;
         } else {
           balls.push({ x: paddle.x, y: 530, vx: 5, vy: -6, r: 8, fire: false });
