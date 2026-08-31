@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Brick Breaker FX 🧱💥</title>
+  <script src="arcade-leaderboard.js"></script>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; touch-action:none; user-select:none; }
     body { background:#070712; color:#fff; font-family:'Segoe UI',sans-serif; overflow:hidden; display:flex; justify-content:center; align-items:center; height:100vh; }
@@ -152,7 +153,17 @@
           isGameOver = true;
           document.getElementById('modal-title').textContent = 'GAME OVER! 💥';
           document.getElementById('final-score').textContent = score;
-          document.getElementById('modal').style.display = 'flex';
+
+          if (window.ArcadeLeaderboard) {
+            window.ArcadeLeaderboard.show({
+              gameId: 'brick-breaker-fx',
+              score: score,
+              scoreUnit: 'PTS',
+              onRestart: restartGame
+            });
+          } else {
+            document.getElementById('modal').style.display = 'flex';
+          }
           return;
         } else {
           balls.push({ x: paddle.x, y: 530, vx: 5, vy: -6, r: 8, fire: false });
