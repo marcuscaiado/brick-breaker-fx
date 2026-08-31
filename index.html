@@ -7,7 +7,8 @@
   <style>
     * { margin:0; padding:0; box-sizing:border-box; touch-action:none; user-select:none; }
     body { background:#070712; color:#fff; font-family:'Segoe UI',sans-serif; overflow:hidden; display:flex; justify-content:center; align-items:center; height:100vh; }
-    #canvas-container { position:relative; width:100vw; height:100vh; max-width:800px; max-height:600px; aspect-ratio:4/3; }
+    #canvas-container { position:relative; width:100vw; height:100vh; max-width:800px; }
+    @media (max-width: 600px) { .hud { font-size:16px; } .arcade-nav { font-size:11px; padding:6px 10px; } }
     canvas { width:100%; height:100%; display:block; background:#070712; }
     .arcade-nav { position:absolute; top:16px; right:16px; z-index:100; background:rgba(0,0,0,0.7); border:2px solid #ff007f; color:#ff007f; padding:8px 16px; border-radius:8px; font-weight:bold; text-decoration:none; font-size:13px; box-shadow:0 0 15px rgba(255,0,127,0.4); }
     .hud { position:absolute; top:16px; left:16px; font-family:monospace; font-size:20px; font-weight:bold; color:#00f5ff; text-shadow:0 0 10px #00f5ff; pointer-events:none; }
@@ -45,7 +46,7 @@
       } catch(e){}
     }
 
-    let score = 0, lives = 3, isGameOver = false;
+    let score = 0, lives = 3, isGameOver = false, level = 1;
     let paddle = { x: 400, y: 550, w: 120, h: 16 };
     let balls = [{ x: 400, y: 530, vx: 5, vy: -6, r: 8, fire: false }];
     let bricks = [], powerups = [], particles = [];
@@ -53,15 +54,16 @@
     function initBricks() {
       bricks = [];
       const colors = ['#ff007f', '#ff9f43', '#ffff00', '#00f5ff', '#b967ff'];
-      for (let r = 0; r < 5; r++) {
+      const rows = Math.min(5 + Math.floor((level - 1) / 2), 8);
+      for (let r = 0; r < rows; r++) {
         for (let c = 0; c < 10; c++) {
           bricks.push({
             x: 60 + c * 68,
             y: 70 + r * 28,
             w: 60,
             h: 20,
-            hp: r === 0 ? 2 : 1,
-            color: colors[r]
+            hp: r < Math.ceil(level / 2) ? 2 : 1,
+            color: colors[r % colors.length]
           });
         }
       }
@@ -157,13 +159,18 @@
         }
       }
 
-      // Check Win
+      // Check Win — advance to next stage
       if (bricks.length === 0) {
-        isGameOver = true;
-        document.getElementById('modal-title').textContent = 'STAGE CLEARED! 🏆';
-        document.getElementById('final-score').textContent = score;
-        document.getElementById('modal').style.display = 'flex';
-        return;
+        level++;
+        initBricks();
+        // Speed boost on new stage
+        for (const b of balls) {
+          const spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+          const newSpd = Math.min(spd * 1.08, 14);
+          const ratio = newSpd / (spd || 1);
+          b.vx *= ratio; b.vy *= ratio;
+        }
+        playTone(1200, 0.2);
       }
 
       // Update Powerups
