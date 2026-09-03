@@ -13,23 +13,32 @@
     #canvas-container { position:relative; width:100vw; height:100vh; max-width:800px; }
     @media (max-width: 600px) { .hud { z-index:20;  font-size:16px;  } .arcade-nav { font-size:11px; padding:6px 10px; } }
     canvas:not(#dopamine-confetti-canvas) { width:100%; height:100%; display:block; background:#070712; }
-    .arcade-nav { position:absolute; top:16px; right:16px; z-index:100; background:rgba(0,0,0,0.7); border:2px solid #ff007f; color:#ff007f; padding:8px 16px; border-radius:8px; font-weight:bold; text-decoration:none; font-size:13px; box-shadow:0 0 15px rgba(255,0,127,0.4); }
+    .arcade-nav { position:absolute; top:16px; right:16px; z-index:100; background:rgba(0,0,0,0.7); border:2px solid #ff007f; color:#ff007f; padding:8px 16px; border-radius:8px; font-weight:bold; text-decoration:none; font-size:13px; box-shadow:0 0 15px rgba(255,0,127,0.4); pointer-events:auto !important; touch-action:auto !important; cursor:pointer; }
     .hud { z-index:20;  position:absolute; top:16px; left:16px; font-family:monospace; font-size:20px; font-weight:bold; color:#00f5ff; text-shadow:0 0 10px #00f5ff; pointer-events:none;  }
-    #modal { position:absolute; inset:0; background:rgba(0,0,0,0.85); display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px; z-index:200; }
+    #modal { position:absolute; inset:0; background:rgba(0,0,0,0.85); display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px; z-index:200; pointer-events:auto; }
     #modal h1 { color:#ff007f; font-size:42px; text-shadow:0 0 20px #ff007f; }
-    .btn { background:linear-gradient(135deg,#00f5ff,#ff007f); border:none; color:#fff; padding:12px 32px; font-size:18px; font-weight:bold; border-radius:8px; cursor:pointer; text-decoration:none; box-shadow:0 0 20px rgba(0,245,255,0.5); }
-  </style>
+    .btn { background:linear-gradient(135deg,#00f5ff,#ff007f); border:none; color:#fff; padding:12px 32px; font-size:18px; font-weight:bold; border-radius:8px; cursor:pointer; text-decoration:none; box-shadow:0 0 20px rgba(0,245,255,0.5); pointer-events:auto !important; touch-action:auto !important; }
+  
+/* Universal Mobile Touch & Top Navigation Safeguards */
+.arcade-nav, .arcade-link, .nav-btn-arcade, .arcade-corner-btn, .arcade-btn, .btn-arcade, a[href*="arcad"], #modal a, #modal button, .modal a, .modal button, #game-over-modal a, #game-over-modal button {
+  pointer-events: auto !important;
+  touch-action: auto !important;
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: rgba(0, 245, 255, 0.4);
+}
+
+</style>
 </head>
 <body>
   <div id="canvas-container">
-    <a href="https://marcuscaiado.github.io/marcus-arcade/" class="arcade-nav">🕹️ Arcade Hub</a>
+    <a href="https://marcuscaiado.github.io/marcus-arcade/" target="_top" class="arcade-nav" onclick="if(window.top){window.top.location.href=this.href;return false;}" ontouchend="if(window.top){window.top.location.href=this.href;return false;}">🕹️ Arcade Hub</a>
     <div class="hud">SCORE: <span id="score-val">0</span> | LIVES: <span id="lives-val">3</span></div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <div id="modal">
       <h1 id="modal-title">GAME OVER! 💥</h1>
       <p style="font-size:20px;">SCORE: <span id="final-score">0</span></p>
       <button class="btn" onclick="restartGame()">PLAY AGAIN 🔄</button>
-      <a href="https://marcuscaiado.github.io/marcus-arcade/" class="btn" style="background:#222; border:1px solid #ff007f;">ARCADE HUB 🕹️</a>
+      <a href="https://marcuscaiado.github.io/marcus-arcade/" target="_top" class="btn" style="background:#222; border:1px solid #ff007f;" onclick="if(window.top){window.top.location.href=this.href;return false;}" ontouchend="if(window.top){window.top.location.href=this.href;return false;}">ARCADE HUB 🕹️</a>
     </div>
   </div>
 
@@ -85,9 +94,19 @@
       paddle.x = Math.max(paddle.w/2, Math.min(800 - paddle.w/2, ((cx - rect.left) / rect.width) * 800));
     };
 
+    const isInteractive = (e) => e.target && e.target.closest && e.target.closest('a, button, .arcade-nav, #modal');
+
     window.addEventListener('mousemove', e => setPaddleX(e.clientX));
-    window.addEventListener('touchmove', e => { e.preventDefault(); setPaddleX(e.touches[0].clientX); }, { passive:false });
-    window.addEventListener('touchstart', e => { e.preventDefault(); setPaddleX(e.touches[0].clientX); }, { passive:false });
+    window.addEventListener('touchmove', e => {
+      if (isInteractive(e)) return;
+      e.preventDefault();
+      setPaddleX(e.touches[0].clientX);
+    }, { passive: false });
+    window.addEventListener('touchstart', e => {
+      if (isInteractive(e)) return;
+      e.preventDefault();
+      setPaddleX(e.touches[0].clientX);
+    }, { passive: false });
 
     function triggerGameOver() {
       if (isGameOver) return;
